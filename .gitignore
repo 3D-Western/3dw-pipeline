@@ -1,0 +1,24 @@
+# Python (all repos)
+**/__pycache__/
+**/.venv/
+*.py[cod]
+
+# Project root env file
+.env
+
+# Windmill local runtime env/state
+infra/windmill/.env
+infra/windmill/.env.*
+infra/windmill/pg_data/
+infra/windmill/db_data/
+infra/windmill/volumes/
+infra/windmill/tmp/
+
+# Windmill CLI local artifacts
+windmill/.wmill/
+windmill/.cache/
+
+# Windmill synced sensitive/config data (keep out of git)
+windmill/secrets/
+windmill/variables/
+windmill/resources/

@@ -26,43 +26,76 @@ This is the repo for the automated slicing pipeline and AI integrations defined 
   - terminal errors
   - manual review outcomes (for `grey_area` / unknown)
 
-## Repo Layout 
+## Repo layout
 
 ```text
 windpipe/
+├── README.md
 ├── docs/
-├── core/
-│   ├── slicing/ # up for debate 
+├── core/ # importable packages 
+│   ├── slicing/ # script files for functionality 
 │   │   ├── model_render/
-│   │   ├── tests/
-│   ├── rust/
+│   │   └── tests/
 ├── mcp-server/
 │   ├── src/
-│   ├── tests/
-│   ├── tests/
+│   └── tests/
 ├── windmill/
-│   ├── f/
-│   │   ├── ingest_job.py
-│   │   ├── extract_images.py
-│   │   ├── classify_nsfw.py
-│   │   ├── map_slicer_profile.py
-│   │   ├── auto_orient.py
-│   │   ├── slice_model.py
-│   │   ├── send_to_3dque.py
-│   │   └── callback_backend.py
-│   └── u/
-│   ├── infra/
-└── windmill/
-├── docker-compose.yml
-├── Caddyfile
-├── .env.example
-└── bootstrap/
-│   └── test_assets/
-├── docker-compose.yml
-├── docker-compose.local.yml
-├── docker-compose.production.yml
-└── REAMDE.md
+│   ├── f/ # primary workflows run inside f 
+│   │   └── pipeline/
+│   │       ├── ingest_job.py
+│   │       ├── extract_images.py
+│   │       ├── classify_nsfw.py
+│   │       ├── map_slicer_profile.py
+│   │       ├── auto_orient.py
+│   │       ├── slice_model.py
+│   │       ├── send_to_3dque.py
+│   │       └── callback_backend.py
+│   └── u/ # for dev use and experiments
+│   └── legacy/ # deprecated and unused pipeline workflows 
+└── infra/
+    └── windmill/
+        ├── docker-compose.yml
+        ├── docker-compose.local.yml
+        ├── docker-compose.production.yml
+        ├── Caddyfile
+        ├── .env.example
+        └── bootstrap/ # for first time setup and test assets
+            └── test_assets/
 ```
+
+### Windmill sync structure (`windmill/`)
+
+- `windmill/f/`: workspace shared folder content (team-owned scripts and flows). This is where production pipeline definitions should live.
+- `windmill/u/`: user-scoped content (personal experiments, scratch scripts, temporary drafts). Keep critical pipeline logic out of this path.
+- `windmill/f/pipeline/*.py`: one script per pipeline stage. These should stay thin and orchestrate calls into `core/*` or service clients.
+
+In practice: treat `f/` as source-of-truth for shared automation, and treat `u/` as non-critical developer space.
+
+### Purpose of each top-level folder
+
+- `docs/`: architecture notes, runbooks, migration decisions, and operational procedures.
+- `core/`: deterministic domain logic for slicing and preprocessing; no orchestration concerns.
+- `mcp-server/`: AI/agent-facing tool API that wraps `core/` in a stable interface.
+- `windmill/`: exported Windmill scripts and flows only.
+- `infra/windmill/`: Windmill runtime deployment and bootstrap artifacts.
+
+### Purpose of Windmill pipeline scripts
+
+- `windmill/f/pipeline/ingest_job.py`: validate incoming payload and normalize job context.
+- `windmill/f/pipeline/extract_images.py`: generate preview/renders used by moderation and QA.
+- `windmill/f/pipeline/classify_nsfw.py`: run moderation gate and return allow/review/block outcome.
+- `windmill/f/pipeline/map_slicer_profile.py`: resolve slicer profile from printer/material/job metadata.
+- `windmill/f/pipeline/auto_orient.py`: compute best orientation before slicing.
+- `windmill/f/pipeline/slice_model.py`: execute slicing and produce machine-ready artifacts.
+- `windmill/f/pipeline/send_to_3dque.py`: enqueue prepared print job to printer scheduler.
+- `windmill/f/pipeline/callback_backend.py`: send final status/progress payload to backend.
+
+### Purpose of Windmill infra files
+
+- `infra/windmill/docker-compose*.yml`: environment-specific Windmill service definitions.
+- `infra/windmill/Caddyfile`: reverse proxy and routing for Windmill services.
+- `infra/windmill/.env.example`: safe template for required runtime env vars.
+- `infra/windmill/bootstrap/test_assets/`: representative payloads/models for local flow validation.
 
 ## Layer responsibilities
 
@@ -76,8 +109,8 @@ windpipe/
 Use an isolated directory for local Windmill runtime files:
 
 ```bash
-mkdir -p pipeline/infra/windmill
-cd pipeline/infra/windmill
+mkdir -p infra/windmill
+cd infra/windmill
 
 curl https://raw.githubusercontent.com/windmill-labs/windmill/main/docker-compose.yml -o docker-compose.yml
 curl https://raw.githubusercontent.com/windmill-labs/windmill/main/Caddyfile -o Caddyfile
@@ -104,8 +137,8 @@ From repo root:
 # install/update CLI (example package manager invocation may vary)
 # see Windmill CLI docs for your OS
 
-mkdir -p pipeline/windmill
-cd pipeline/windmill
+mkdir -p windmill
+cd windmill
 
 # Add workspace mapping (replace placeholders)
 wmill workspace add local-dev <workspace_id> <remote_url>
@@ -117,7 +150,7 @@ wmill sync pull --skip-variables --skip-secrets --skip-resources
 ## Day-to-day developer workflow
 
 ```bash
-# from pipeline/windmill
+# from windmill
 
 # 1) edit scripts/flows in IDE under f/ and u/
 
@@ -143,15 +176,13 @@ wmill script generate-metadata f/pipeline/slice_model.py
 
 ## Testing sequence (local)
 
-1. Unit test `pipeline/core/*`
-2. Test MCP tool wrappers in `pipeline/mcp-server/*`
+1. Unit test `core/*`
+2. Test MCP tool wrappers in `mcp-server/*`
 3. Run Windmill script tests with representative job payloads
-4. Run full flow with `pipeline/test_assets/*`
+4. Run full flow with `infra/windmill/bootstrap/test_assets/*`
 5. Validate backend callback payloads and status transitions
 
 ---
-
-## 3) GitHub Push Workflow and Production Planning
 
 ## GitHub workflow now (no production workspace yet)
 
@@ -169,7 +200,7 @@ Recommended local git sequence:
 
 ```bash
 git checkout -b feat/wm-nsfw-gate
-git add pipeline/core pipeline/mcp-server pipeline/windmill windmill.md
+git add core mcp-server windmill README.md
 git commit -m "feat(pipeline): add windmill nsfw gate flow and tool wrappers"
 git push -u origin feat/wm-nsfw-gate
 ```
@@ -192,10 +223,8 @@ The following must be done:
 ## Server docker-compose setup
 
 1. Clone this repository
-2. Use `pipeline/infra/windmill/` compose stack for Windmill services
+2. Use `infra/windmill/` compose stack for Windmill services
 3. Provide env/secrets through server-managed `.env` or secrets manager
 4. Attach Windmill to existing reverse proxy/domain strategy
 5. Keep Windmill Postgres persistent and backed up
 6. Expose only intended public routes, keep workers internal
-
-
