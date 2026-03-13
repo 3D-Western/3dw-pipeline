@@ -39,36 +39,177 @@ graph LR
 
 # Workflow 
 
-1. Backend POSTs request via an API gateway to the n8n instance 
+## Backend Integration Contract (n8n API)
 
-```JSON
+Reference: `docs/n8n_integration_api.md`
+
+Base path for callbacks from the pipeline to backend:
+
+- `/api/v1/integrations/n8n`
+
+Required auth header for every callback:
+
+- `X-Service-Token: <opaque_token>`
+
+Standard backend response envelope:
+
+```json
 {
-    "title": string,
-    "description": string,
-    "formAnswers": {
-        "purpose": string,
-        "design_intent": "functional" | "visual" | "structural",
-    },
-    "jobId": string,
-    "status" "RUNNING",
-    "category": string,
-    "file": {
-
-    },
+  "success": true,
+  "data": {}
 }
 ```
 
-TODO: check docs for format! 
+Standard error envelope:
 
-2. Backend sends to file to the local SeeweedFS S3 compatible bucket 
-3. The pipeline webhook receives the backend POST request, which sends the metadata of the print job including the filename (the key) for retrieving the raw file from the bucket
-4. If the pipeline is saturated or busy, n8n handles queuing of jobs internally using Redis, and processes job in a First In First Out (FIFO) manner 
-5. n8n pulls the raw file from the bucket for the corresponding print job it starts on 
-6. Images are extracted from the raw 3D file via a Python script using OpenSCAD
-7. The images are sent to a Vision language Model as a microservice; if the vision language model (VLM) returns a positive classification, the pipeline terminates and POSTs the result of the printjob including the metadata to the backend, otherwise the pipeline continues after receiving a response from the VLM
-8. Based on the metadata of the print request, slicer profile settings are applied 
-9. The 3D model is auto oriented for the best position for slicing using the Tweaker 3 CLI 
-10. The 3D model is sliced, and then sent to 3DQue's queuing system for printing 
-11. n8n has its own internal Postgres container to keep track of the system. All data is centralized to the MariaDB backend, so after each print job, the status of the print job is POST'ed to the backend, and n8n logs for each print job are given a TTL and removed after a week
+```json
+{
+  "success": false,
+  "error": {
+    "code": "ERROR_CODE",
+    "message": "Human-readable message",
+    "details": {}
+  }
+}
+```
 
+ID contract:
+
+- `jobId` (UUID): backend-owned print job ID
+- `executionId` (string): n8n/windmill execution ID
+- Pipeline callbacks must include the same `executionId` after start to avoid `409 EXECUTION_ID_CONFLICT`
+
+## 0) Payload Into Pipeline (Backend -> pipeline trigger)
+
+The n8n integration API doc defines callback endpoints (pipeline -> backend), not the trigger payload schema itself.
+
+For this pipeline, treat these as required minimum inputs at ingest time:
+
+```json
+{
+  "jobId": "550e8400-e29b-41d4-a716-446655440000",
+  "file": {
+    "storageKey": "print-jobs/42/input/model.stl"
+  }
+}
+```
+
+Common metadata fields used by pipeline steps (when provided):
+
+- `title`
+- `description`
+- `category`
+- `formAnswers.purpose`
+- `formAnswers.design_intent`
+
+## Pipeline -> Backend Callbacks (Current)
+
+### 1) Mark execution started
+
+Endpoint:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/started`
+
+Body:
+
+```json
+{
+  "executionId": "123456",
+  "workflowKey": "DEFECT_SCAN_V1",
+  "startedAt": "2026-01-13T17:21:33.120Z"
+}
+```
+
+### 2) Mark execution complete (success)
+
+Endpoint:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/complete`
+
+Body:
+
+```json
+{
+  "executionId": "123456",
+  "finishedAt": "2026-01-13T17:25:55.000Z",
+  "result": {
+    "resultRef": "s3://bucket/orders/42/output.json",
+    "summary": {
+      "defectsFound": 3
+    }
+  }
+}
+```
+
+### 3) Mark execution failed
+
+Endpoint:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/failed`
+
+Body:
+
+```json
+{
+  "executionId": "123456",
+  "finishedAt": "2026-01-13T17:24:01.000Z",
+  "error": {
+    "code": "MODEL_ERROR",
+    "message": "Out of memory"
+  }
+}
+```
+
+### 4) Manual termination sync
+
+Endpoint:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/terminated`
+
+Body:
+
+```json
+{
+  "executionId": "123456",
+  "terminatedAt": "2026-01-13T18:01:10.000Z",
+  "reason": "Manually stopped in n8n UI"
+}
+```
+
+### 5) Result file upload handshake
+
+Request upload URL:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/presigned-upload`
+
+```json
+{
+  "executionId": "123456",
+  "fileName": "processed_model.stl",
+  "fileSize": 3457600,
+  "contentType": "model/stl"
+}
+```
+
+Confirm upload:
+
+- `POST /api/v1/integrations/n8n/jobs/{jobId}/confirm-upload`
+
+```json
+{
+  "executionId": "123456",
+  "fileId": "550e8400-e29b-41d4-a716-446655440000",
+  "checksum": "a3b2c1d4e5f6789012345678901234567890123456789012345678901234abcd"
+}
+```
+
+## Deferred Endpoints For Windmill Migration (Not Used Right Now)
+
+Because slicing currently completes in milliseconds, cooperative polling/reporting is intentionally deferred:
+
+- Do not use `POST /api/v1/integrations/n8n/jobs/{jobId}/progress`
+- Do not use `GET /api/v1/integrations/n8n/jobs/{jobId}/status?executionId=...`
+- Do not use `POST /api/v1/integrations/n8n/jobs/{jobId}/canceled`
+
+If slicing time increases, re-enable cooperative cancellation and periodic progress updates.
 
