@@ -1,4 +1,4 @@
- # 3DWindPipe Automated Pipeline 
+ # 3DWindPipe Automated Pipeline
 
 This is the repo for the automated slicing pipeline and AI integrations defined for the 3DW automated print farm.
 
@@ -32,15 +32,15 @@ This is the repo for the automated slicing pipeline and AI integrations defined 
 windpipe/
 ├── README.md
 ├── docs/
-├── core/ # importable packages 
-│   ├── slicing/ # script files for functionality 
+├── core/ # importable packages
+│   ├── slicing/ # script files for functionality
 │   │   ├── model_render/
 │   │   └── tests/
 ├── mcp-server/
 │   ├── src/
 │   └── tests/
-├── windmill/
-│   ├── f/ # primary workflows run inside f 
+├── windmill/ # logic for windmill orchestration
+│   ├── f/ # primary workflows run inside f
 │   │   └── pipeline/
 │   │       ├── ingest_job.py
 │   │       ├── extract_images.py
@@ -51,7 +51,7 @@ windpipe/
 │   │       ├── send_to_3dque.py
 │   │       └── callback_backend.py
 │   └── u/ # for dev use and experiments
-│   └── legacy/ # deprecated and unused pipeline workflows 
+│   └── legacy/ # deprecated and unused pipeline workflows
 └── infra/
     └── windmill/
         ├── docker-compose.yml
@@ -129,7 +129,7 @@ If port 80 conflicts with your existing stack, run Windmill on a dedicated host/
 4. Create workspace, for example: `local-dev`
 5. Configure base URL and instance settings
 
-## Developer setup with `wmill` CLI
+## Developer setup with wmill
 
 From repo root:
 
@@ -147,7 +147,7 @@ wmill workspace add local-dev <workspace_id> <remote_url>
 wmill sync pull --skip-variables --skip-secrets --skip-resources
 ```
 
-## Day-to-day developer workflow
+## workflow
 
 ```bash
 # from windmill
@@ -174,6 +174,41 @@ wmill flow bootstrap f/pipeline/vetting_pipeline
 wmill script generate-metadata f/pipeline/slice_model.py
 ```
 
+## Pre-commit setup for fresh clone
+
+This repo uses a single root pre-commit config to run quality gates for `core/` and `mcp-server/`.
+
+1. Install pre-commit once on your machine:
+
+```bash
+uv tool install pre-commit
+```
+
+2. From repo root, prepare project environments used by hooks:
+
+```bash
+cd core && uv sync
+cd ../mcp-server && uv sync
+cd ..
+```
+
+3. Install git hooks in this clone:
+
+```bash
+pre-commit install
+pre-commit install --hook-type pre-push
+```
+
+4. Validate everything manually (recommended first run):
+
+```bash
+pre-commit run --all-files
+pre-commit run --hook-stage pre-push --all-files
+```
+
+- `pre-commit`: YAML/whitespace checks + ruff/mypy for changed files in `core/` and `mcp-server/`.
+- `pre-push`: full pytest suite for `core/` and `mcp-server/`.
+
 ## Testing sequence (local)
 
 1. Unit test `core/*`
@@ -181,29 +216,6 @@ wmill script generate-metadata f/pipeline/slice_model.py
 3. Run Windmill script tests with representative job payloads
 4. Run full flow with `infra/windmill/bootstrap/test_assets/*`
 5. Validate backend callback payloads and status transitions
-
----
-
-## GitHub workflow now (no production workspace yet)
-
-- Keep GitHub as source of truth for pipeline code and Windmill definitions.
-- Use branch-per-unit changes:
-  - `feat/wm-ingest`
-  - `feat/wm-nsfw-gate`
-  - `feat/wm-slice-handoff`
-- PRs should include:
-  - core package changes
-  - Windmill script/flow changes
-  - tests and sample payload updates
-
-Recommended local git sequence:
-
-```bash
-git checkout -b feat/wm-nsfw-gate
-git add core mcp-server windmill README.md
-git commit -m "feat(pipeline): add windmill nsfw gate flow and tool wrappers"
-git push -u origin feat/wm-nsfw-gate
-```
 
 ## For prod
 

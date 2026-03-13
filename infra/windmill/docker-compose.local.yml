@@ -1,0 +1,4 @@
+services:
+  windmill:
+    environment:
+      - MODE=local

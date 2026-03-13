@@ -1,0 +1,7 @@
+services:
+  windmill:
+    image: ghcr.io/windmill-labs/windmill:latest
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env

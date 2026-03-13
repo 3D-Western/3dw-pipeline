@@ -1,0 +1,5 @@
+services:
+  windmill:
+    restart: always
+    environment:
+      - MODE=production

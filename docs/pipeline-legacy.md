@@ -1,20 +1,20 @@
 # Legacy n8n Pipeline
 
-The pipeline receives print jobs from the backend and is responsible for automated preprocessing of 3D prints, vetting and safety checks (whether the print is 
+The pipeline receives print jobs from the backend and is responsible for automated preprocessing of 3D prints, vetting and safety checks (whether the print is
 appropriate) before being actually sent to the printers. Processing scripts include auto orient, image extraction for NSFW AI vision model checks and slicing.
 
 The current pipeline uses a self hosted docker container of an n8n instance to execute a linear workflow for the vetting process for ensure the STL files are safe and printable,
 before actually sending them to the 3DQue printers via the 3DQue API, which is also locally hosted.
 
-# Pipeline Flowchart 
+# Pipeline Flowchart
 
-```mermaid 
-graph LR 
+```mermaid
+graph LR
 
     Backend((backend))
 
     subgraph pipeline_flowchart [Pipeline Flowchart]
-    direction LR 
+    direction LR
     Seaweed[Local S3]
     Webhook["Webhook </br> **RESTful API call (POST ID)**"]
     Extract_Images[Extract Images of 3D Model]
@@ -23,21 +23,21 @@ graph LR
     auto_orient["Auto Orient 3D Model **(Tweaker 3)**"]
     orca["Slice the Model **(Orca Slicer)**"]
     order["Send to 3D Printers **(3DQue API)**"]
-    end 
+    end
 
-    Backend --> |POSTs request with ID| Webhook 
+    Backend --> |POSTs request with ID| Webhook
     Backend --> |Pushes file to| Seaweed
-    Webhook --> |Retrieves file using ID from| Seaweed 
+    Webhook --> |Retrieves file using ID from| Seaweed
     Webhook --> |Uses file to| Extract_Images
     Extract_Images --> |Queries| NSFW_AI
-    NSFW_AI --> |Returns positives to| Backend 
+    NSFW_AI --> |Returns positives to| Backend
     NSFW_AI --> |Sends negatives to| slicer_presets
     slicer_presets --> |Adds profiles settings and sends to| auto_orient
-    auto_orient --> |Sends file to| orca 
-    orca --> |Slices STL to 3MF| order 
+    auto_orient --> |Sends file to| orca
+    orca --> |Slices STL to 3MF| order
 ```
 
-# Workflow 
+# Workflow
 
 ## Backend Integration Contract (n8n API)
 
@@ -212,4 +212,3 @@ Because slicing currently completes in milliseconds, cooperative polling/reporti
 - Do not use `POST /api/v1/integrations/n8n/jobs/{jobId}/canceled`
 
 If slicing time increases, re-enable cooperative cancellation and periodic progress updates.
-
