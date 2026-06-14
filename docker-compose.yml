@@ -1,0 +1,22 @@
+services:
+  restate:
+    image: docker.restate.dev/restatedev/restate:latest
+    container_name: restate_container
+    ports: 
+      - "8080:8080" # ingress
+      - "9070:9070" # UI 
+      - "9071:9071" # admin 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  orcaslicer:
+    build:
+      context: .
+      dockerfile: Dockerfile.orcaslicer
+      args:
+        OS_VER: "2.3.1"
+    container_name: orcaslicer-docker
+    restart: unless-stopped
+    volumes: # TODO: configure volumes for output properly 
+      - ./volumes/inputs:/tmp/inputs
+      - ./volumes/outputs:/tmp/outputs
+      - ./volumes/infiles:/tmp/infiles

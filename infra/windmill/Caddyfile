@@ -1,3 +1,0 @@
-:80 {
-  reverse_proxy windmill:8000
-}
