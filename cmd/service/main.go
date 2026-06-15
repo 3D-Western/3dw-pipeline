@@ -25,7 +25,7 @@ func main() {
 	mux.HandleFunc("GET /healthz", healthHandler)
 
 	addr := ":" + port
-	log.Printf("windpipe service listening on http://localhost%s", addr)
+	log.Printf("3dw-pipeline service listening on http://localhost%s", addr)
 
 	server := &http.Server{
 		Addr:              addr,
@@ -40,14 +40,14 @@ func main() {
 
 func rootHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "text/plain; charset=utf-8")
-	_, _ = w.Write([]byte("windpipe service is running\n"))
+	_, _ = w.Write([]byte("3dw-pipeline service is running\n"))
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(healthResponse{
 		OK:      true,
-		Service: "windpipe",
+		Service: "3dw-pipeline",
 		Time:    time.Now().UTC().Format(time.RFC3339),
 	})
 }

@@ -1,4 +1,4 @@
-module windpipe
+module 3dw-pipeline
 
 go 1.26.4
 
